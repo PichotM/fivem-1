@@ -14,7 +14,7 @@ namespace fx
 	class ServerEventComponent : public fwRefCountable, public IAttached<ServerInstanceBase>
 	{
 	public:
-		virtual void TriggerClientEvent(const std::string_view& eventName, const void* data, size_t dataLen, const std::optional<std::string_view>& targetSrc = std::optional<std::string_view>());
+		virtual void TriggerClientEvent(const std::string_view& eventName, const void* data, size_t dataLen, const std::optional<std::string_view>& targetSrc = std::optional<std::string_view>(), NetPacketType flags = NetPacketType_Reliable);
 
 		inline virtual void AttachToObject(ServerInstanceBase* object) override
 		{
@@ -38,7 +38,7 @@ namespace fx
 			packer.pack_array(sizeof...(args));
 			(packer.pack(args), ...);
 
-			TriggerClientEvent(eventName, buf.data(), buf.size(), targetSrc);
+			TriggerClientEvent(eventName, buf.data(), buf.size(), targetSrc, NetPacketType_Reliable);
 		}
 
 	private:

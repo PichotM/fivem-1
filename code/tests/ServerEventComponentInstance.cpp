@@ -1,11 +1,12 @@
-﻿#include <StdInc.h>
+#include <StdInc.h>
+#include <GameServer.h>
 
 #include "ServerEventComponent.h"
 
 #include "ServerEventComponentInstance.h"
 
 void fx::ServerEventComponent::TriggerClientEvent(const std::string_view& eventName, const void* data, size_t dataLen,
-                                                  const std::optional<std::string_view>& targetSrc)
+                                                  const std::optional<std::string_view>& targetSrc, const NetPacketType flags)
 {
 	std::optional<std::string> targetSourceStr;
 	if (auto target = targetSrc)

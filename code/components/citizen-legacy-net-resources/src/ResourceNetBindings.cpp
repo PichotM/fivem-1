@@ -106,6 +106,8 @@ private:
 
 	bool RequestResourceFileSet(fx::Resource* resource, const std::string& setName);
 
+	void TriggerServerEventInterval(fx::ScriptContext& context, bool isReliable);
+
 private:
 	std::queue<std::string> m_resourceUpdateQueue;
 
@@ -600,6 +602,31 @@ bool NetLibraryResourcesComponent::RequestResourceFileSet(fx::Resource* resource
 	return result;
 }
 
+void NetLibraryResourcesComponent::TriggerServerEventInterval(fx::ScriptContext& context, bool isReliable)
+{
+	std::string eventName = context.GetArgument<const char*>(0);
+	size_t payloadSize = context.GetArgument<uint32_t>(2);
+
+	std::string eventPayload = std::string(context.GetArgument<const char*>(1), payloadSize);
+
+	m_netLibrary->OnTriggerServerEvent(eventName, eventPayload);
+
+	net::Buffer buffer;
+	buffer.Write<uint16_t>(eventName.size() + 1);
+	buffer.Write(eventName.c_str(), eventName.size() + 1);
+
+	buffer.Write(eventPayload.c_str(), eventPayload.size());
+
+	if (isReliable)
+	{
+		m_netLibrary->SendReliableCommand("msgServerEvent", reinterpret_cast<const char*>(buffer.GetBuffer()), buffer.GetCurOffset());
+	}
+	else
+	{
+		m_netLibrary->SendUnreliableCommand("msgServerEvent", reinterpret_cast<const char*>(buffer.GetBuffer()), buffer.GetCurOffset());
+	}
+}
+
 void NetLibraryResourcesComponent::AttachToObject(NetLibrary* netLibrary)
 {
 	m_netLibrary = netLibrary;
@@ -778,22 +805,14 @@ void NetLibraryResourcesComponent::AttachToObject(NetLibrary* netLibrary)
 		}
 	});
 
-	fx::ScriptEngine::RegisterNativeHandler("TRIGGER_SERVER_EVENT_INTERNAL", [netLibrary](fx::ScriptContext& context)
+	fx::ScriptEngine::RegisterNativeHandler("TRIGGER_SERVER_EVENT_INTERNAL", [this](fx::ScriptContext& context)
 	{
-		std::string eventName = context.GetArgument<const char*>(0);
-		size_t payloadSize = context.GetArgument<uint32_t>(2);
+		TriggerServerEventInterval(context, true);
+	});
 
-		std::string eventPayload = std::string(context.GetArgument<const char*>(1), payloadSize);
-
-		netLibrary->OnTriggerServerEvent(eventName, eventPayload);
-
-		net::Buffer buffer;
-		buffer.Write<uint16_t>(eventName.size() + 1);
-		buffer.Write(eventName.c_str(), eventName.size() + 1);
-
-		buffer.Write(eventPayload.c_str(), eventPayload.size());
-
-		netLibrary->SendReliableCommand("msgServerEvent", reinterpret_cast<const char*>(buffer.GetBuffer()), buffer.GetCurOffset());
+	fx::ScriptEngine::RegisterNativeHandler("TRIGGER_SERVER_EVENT_INTERNAL_UNRELIABLE", [this](fx::ScriptContext& context)
+	{
+		TriggerServerEventInterval(context, false);
 	});
 
 	fx::ScriptEngine::RegisterNativeHandler("TRIGGER_LATENT_SERVER_EVENT_INTERNAL", [netLibrary](fx::ScriptContext& context)

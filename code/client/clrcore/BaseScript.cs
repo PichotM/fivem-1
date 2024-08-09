@@ -231,6 +231,14 @@ namespace CitizenFX.Core
 		}
 
 		[SecuritySafeCritical]
+		public static void TriggerServerEventUnreliable(string eventName, int bytesPerSecond, params object[] args)
+		{
+			var argsSerialized = MsgPackSerializer.Serialize(args);
+
+			TriggerLatentServerEventInternalUnreliable(eventName, argsSerialized, bytesPerSecond);
+		}
+
+		[SecuritySafeCritical]
 		public static void TriggerLatentServerEvent(string eventName, int bytesPerSecond, params object[] args)
 		{
 			var argsSerialized = MsgPackSerializer.Serialize(args);
@@ -257,6 +265,29 @@ namespace CitizenFX.Core
 				fixed (byte* serialized = &argsSerialized[0])
 				{
 					Function.Call(Hash.TRIGGER_CLIENT_EVENT_INTERNAL, eventName, "-1", serialized, argsSerialized.Length);
+				}
+			}
+		}
+
+		public static void TriggerClientEventUnreliable(Player player, string eventName, params object[] args)
+		{
+			player.TriggerEventUnreliable(eventName, args);
+		}
+
+		/// <summary>
+		/// Broadcasts an unreliable event to all connected players.
+		/// </summary>
+		/// <param name="eventName">The name of the event.</param>
+		/// <param name="args">Arguments to pass to the event.</param>
+		public static void TriggerClientEventUnreliable(string eventName, params object[] args)
+		{
+			var argsSerialized = MsgPackSerializer.Serialize(args);
+
+			unsafe
+			{
+				fixed (byte* serialized = &argsSerialized[0])
+				{
+					Function.Call(Hash.TRIGGER_CLIENT_EVENT_INTERNAL_UNRELIABLE, eventName, "-1", serialized, argsSerialized.Length);
 				}
 			}
 		}

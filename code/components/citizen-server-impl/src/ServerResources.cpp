@@ -757,7 +757,7 @@ static InitFunction initFunction([]()
 #include <ScriptEngine.h>
 #include <optional>
 
-void fx::ServerEventComponent::TriggerClientEvent(const std::string_view& eventName, const void* data, size_t dataLen, const std::optional<std::string_view>& targetSrc)
+void fx::ServerEventComponent::TriggerClientEvent(const std::string_view& eventName, const void* data, size_t dataLen, const std::optional<std::string_view>& targetSrc, const NetPacketType flags)
 {
 	// build the target event
 	net::Buffer outBuffer;
@@ -791,16 +791,42 @@ void fx::ServerEventComponent::TriggerClientEvent(const std::string_view& eventN
 				fx::WarningDeprecationf<ScriptDeprecations::CLIENT_EVENT_OLD_NET_ID>("natives", "TRIGGER_CLIENT_EVENT_INTERNAL: client %d is not the same as the target %d. This happens when the oldId from the playerJoining event is used. Use source instead.\n", client->GetNetId(), targetNetId);
 			}
 			// TODO(fxserver): >MTU size?
-			client->SendPacket(0, outBuffer, NetPacketType_Reliable);
+			client->SendPacket(0, outBuffer, flags);
 		}
 	}
 	else
 	{
 		clientRegistry->ForAllClients([&](const fx::ClientSharedPtr& client)
 		{
-			client->SendPacket(0, outBuffer, NetPacketType_Reliable);
+			client->SendPacket(0, outBuffer, flags);
 		});
 	}
+}
+
+void TriggerClientEventInternal(fx::ScriptContext& context, const NetPacketType flags)
+{
+	std::string_view eventName = context.CheckArgument<const char*>(0);
+	std::optional<std::string_view> targetSrc;
+
+	{
+		auto targetSrcIdx = context.CheckArgument<const char*>(1);
+
+		if (strcmp(targetSrcIdx, "-1") != 0)
+		{
+			targetSrc = targetSrcIdx;
+		}
+	}
+
+	const void* data = context.GetArgument<const void*>(2);
+	uint32_t dataLen = context.GetArgument<uint32_t>(3);
+
+	// get the current resource manager
+	auto resourceManager = fx::ResourceManager::GetCurrent();
+
+	// get the owning server instance
+	auto instance = resourceManager->GetComponent<fx::ServerInstanceBaseRef>()->Get();
+
+	instance->GetComponent<fx::ServerEventComponent>()->TriggerClientEvent(eventName, data, dataLen, targetSrc, flags);
 }
 
 static InitFunction initFunction2([]()
@@ -844,28 +870,12 @@ static InitFunction initFunction2([]()
 
 	fx::ScriptEngine::RegisterNativeHandler("TRIGGER_CLIENT_EVENT_INTERNAL", [](fx::ScriptContext& context)
 	{
-		std::string_view eventName = context.CheckArgument<const char*>(0);
-		std::optional<std::string_view> targetSrc;
+		TriggerClientEventInternal(context, NetPacketType_Reliable);
+	});
 
-		{
-			auto targetSrcIdx = context.CheckArgument<const char*>(1);
-
-			if (strcmp(targetSrcIdx, "-1") != 0)
-			{
-				targetSrc = targetSrcIdx;
-			}
-		}
-
-		const void* data = context.GetArgument<const void*>(2);
-		uint32_t dataLen = context.GetArgument<uint32_t>(3);
-
-		// get the current resource manager
-		auto resourceManager = fx::ResourceManager::GetCurrent();
-
-		// get the owning server instance
-		auto instance = resourceManager->GetComponent<fx::ServerInstanceBaseRef>()->Get();
-
-		instance->GetComponent<fx::ServerEventComponent>()->TriggerClientEvent(eventName, data, dataLen, targetSrc);
+	fx::ScriptEngine::RegisterNativeHandler("TRIGGER_CLIENT_EVENT_INTERNAL_UNRELIABLE", [](fx::ScriptContext& context)
+	{
+		TriggerClientEventInternal(context, NetPacketType_Unreliable);
 	});
 
 	fx::ScriptEngine::RegisterNativeHandler("TRIGGER_LATENT_CLIENT_EVENT_INTERNAL", [](fx::ScriptContext& context)
